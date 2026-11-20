@@ -16,6 +16,8 @@
 	<string>1</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>13.0</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Show contact names instead of phone numbers in your message digest.</string>
 	<!-- Background-only: no Dock icon, no window. -->
 	<key>LSBackgroundOnly</key>
 	<true/>

@@ -48,6 +48,7 @@ struct Message: Encodable {
     let at: Date
     let fromMe: Bool
     let sender: String?       // phone number or email; nil for your own messages
+    var senderName: String? = nil  // from Contacts, if the app has Contacts permission
     let chat: String?         // chat identifier (number, email, or group id)
     let chatName: String?     // group name, if the chat has one
     let text: String?
@@ -60,8 +61,24 @@ struct Snapshot: Encodable {
     let generatedAt: Date
     let since: Date?
     let hours: Double
+    let contacts: String      // Contacts permission status; names are absent unless "authorized"
     let messageCount: Int
+    let chats: [Chat]
     let messages: [Message]
+}
+
+struct Person: Encodable {
+    let handle: String
+    let name: String?
+}
+
+struct Chat: Encodable {
+    let chat: String
+    let isGroup: Bool
+    let title: String          // group name, else member names/handles
+    let members: [Person]      // everyone in the chat except you
+    let received: Int
+    let sent: Int
 }
 
 // MARK: - Reading chat.db
@@ -145,6 +162,52 @@ func readMessages(since: Date) throws -> [Message] {
     return messages
 }
 
+let membersQuery = """
+    SELECT h.id FROM chat c
+    JOIN chat_handle_join chj ON chj.chat_id = c.ROWID
+    JOIN handle h ON h.ROWID = chj.handle_id
+    WHERE c.chat_identifier = ?
+    ORDER BY h.id
+    """
+
+func readMembers(of chat: String) throws -> [String] {
+    let db = try openReadOnly(chatDatabase)
+    defer { sqlite3_close(db) }
+    var statement: OpaquePointer?
+    guard sqlite3_prepare_v2(db, membersQuery, -1, &statement, nil) == SQLITE_OK else {
+        throw ExportError.database("\(chatDatabase.path): \(String(cString: sqlite3_errmsg(db)))")
+    }
+    defer { sqlite3_finalize(statement) }
+    let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+    sqlite3_bind_text(statement, 1, chat, -1, transient)
+    var handles: [String] = []
+    while sqlite3_step(statement) == SQLITE_ROW {
+        if let handle = columnText(statement, 0) { handles.append(handle) }
+    }
+    return Array(Set(handles)).sorted()
+}
+
+func summarizeChats(_ messages: [Message], names: ContactNames) throws -> [Chat] {
+    var order: [String] = []
+    var byChat: [String: [Message]] = [:]
+    for message in messages {
+        let chat = message.chat ?? "unknown"
+        if byChat[chat] == nil { order.append(chat) }
+        byChat[chat, default: []].append(message)
+    }
+    return try order.map { chat in
+        let chatMessages = byChat[chat] ?? []
+        let handles = try readMembers(of: chat)
+        let members = (handles.isEmpty ? [chat] : handles).map { Person(handle: $0, name: names.name(for: $0)) }
+        let isGroup = members.count > 1
+        let title = chatMessages.lazy.compactMap(\.chatName).first
+            ?? members.map { $0.name ?? $0.handle }.joined(separator: ", ")
+        return Chat(chat: chat, isGroup: isGroup, title: title, members: members,
+                    received: chatMessages.filter { !$0.fromMe }.count,
+                    sent: chatMessages.filter(\.fromMe).count)
+    }
+}
+
 func columnText(_ statement: OpaquePointer?, _ index: Int32) -> String? {
     sqlite3_column_text(statement, index).map { String(cString: $0) }
 }
@@ -193,16 +256,19 @@ let since = now.addingTimeInterval(-options.hours * 3600)
 let snapshot: Snapshot
 var exitCode: Int32 = 0
 do {
-    let messages = try readMessages(since: since)
-    snapshot = Snapshot(status: "ok", detail: nil, generatedAt: now, since: since,
-                        hours: options.hours, messageCount: messages.count, messages: messages)
+    let names = ContactNames.load()
+    var messages = try readMessages(since: since)
+    for index in messages.indices { messages[index].senderName = names.name(for: messages[index].sender) }
+    snapshot = Snapshot(status: "ok", detail: nil, generatedAt: now, since: since, hours: options.hours,
+                        contacts: names.status, messageCount: messages.count,
+                        chats: try summarizeChats(messages, names: names), messages: messages)
 } catch let error as ExportError {
     snapshot = Snapshot(status: error.code, detail: error.detail, generatedAt: now, since: since,
-                        hours: options.hours, messageCount: 0, messages: [])
+                        hours: options.hours, contacts: "not_checked", messageCount: 0, chats: [], messages: [])
     exitCode = 2
 } catch {
     snapshot = Snapshot(status: "unexpected_error", detail: "\(error)", generatedAt: now, since: since,
-                        hours: options.hours, messageCount: 0, messages: [])
+                        hours: options.hours, contacts: "not_checked", messageCount: 0, chats: [], messages: [])
     exitCode = 1
 }
 

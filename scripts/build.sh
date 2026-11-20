@@ -30,8 +30,9 @@ sed "s/__BUNDLE_ID__/$BUNDLE_ID/" "$ROOT/Sources/Info.plist" > "$APP/Contents/In
 
 swiftc -O -lsqlite3 \
   -o "$APP/Contents/MacOS/messages-digest" \
-  "$ROOT/Sources/main.swift"
+  "$ROOT"/Sources/*.swift
 
-codesign --force --options runtime --timestamp=none --sign "$IDENTITY" "$APP"
+codesign --force --options runtime --timestamp=none \
+  --entitlements "$ROOT/Sources/MessagesDigest.entitlements" --sign "$IDENTITY" "$APP"
 codesign --verify --strict "$APP"
 echo "build: $APP" >&2

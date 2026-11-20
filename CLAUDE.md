@@ -7,7 +7,8 @@ Reading Apple Messages requires Full Disk Access (FDA). Messages' AppleScript di
 can list chats and send texts but cannot read message text, so "Automation" permission
 is not enough. Rather than granting FDA to Terminal or Claude (which would let them read
 everything on disk), this repo builds `MessagesDigest.app`, which gets FDA and does
-exactly one read-only thing.
+exactly one read-only thing. The app also holds its own Contacts permission, so the
+snapshot carries names instead of bare phone numbers.
 
 ## How it fits together
 
@@ -26,7 +27,9 @@ Claude: /digest  ->  "needs a reply / plans / FYI" summary
 
 | Piece | File | Job |
 |---|---|---|
-| Exporter | `Sources/main.swift` | Query last N hours, decode text, write JSON with a `status` field |
+| Exporter | `Sources/main.swift` | Query last N hours, decode text, list chat members, write JSON with a `status` field |
+| Names | `Sources/Contacts.swift` | Map phone/email to contact names (app's own Contacts grant) |
+| Entitlement | `Sources/MessagesDigest.entitlements` | Hardened runtime needs it to use Contacts |
 | Build | `scripts/build.sh` | Compile, wrap as `.app`, codesign |
 | Install | `scripts/install.sh` | Copy to `~/Applications`, load the LaunchAgent |
 | On-demand run | `scripts/refresh.sh` | `open` the app so macOS checks the app's grant, not the caller's |
@@ -42,8 +45,9 @@ Claude: /digest  ->  "needs a reply / plans / FYI" summary
 2. `scripts/install.sh`
 3. System Settings > Privacy & Security > Full Disk Access > `+` >
    `~/Applications/MessagesDigest.app` (Cmd-Shift-G to type the path). Toggle on.
-4. `scripts/refresh.sh` then check `status` in the printed file is `ok`.
-5. In Claude Code in this folder: `/digest` (or `/digest 24` for a day).
+4. The first run asks for Contacts access for MessagesDigest; allow it for names (optional).
+5. `scripts/refresh.sh` then check `status` in the printed file is `ok`.
+6. In Claude Code in this folder: `/digest` (or `/digest 24` for a day).
 
 ## Running it every few hours with Claude
 
@@ -61,8 +65,10 @@ every 3 hours), or ask Claude to "make a scheduled task that runs /digest every 
   `NSAttributedString` in `attributedBody`; `decodeAttributedBody` handles it.
 - **Filtered out.** Tapbacks (`associated_message_type != 0`) and system items
   (`item_type != 0`).
-- **Senders are raw handles** (phone/email). Adding contact names would need Contacts
-  permission; do that in the app, not in Claude.
+- **Names.** Handles match contacts on the last 10 phone digits or the lowercased email.
+  Denied Contacts access is not an error: `contacts` says why and names are omitted.
+- **Snapshot shape.** `chats[]` has `title`, `is_group`, `members[]` (handle + name),
+  `received`, `sent`; `messages[]` has `sender`, `sender_name`, `chat`, `text`.
 - **Errors are data.** A failed run still writes `latest.json` with `status` and `detail`,
   so the reader always knows why there are no messages.
 
@@ -74,6 +80,5 @@ every 3 hours), or ask Claude to "make a scheduled task that runs /digest every 
 
 ## Ideas to extend
 
-- Contact names via the Contacts framework (needs a Contacts grant for the app).
 - A `--since-last-run` mode that stores the last exported message date.
 - WhatsApp: same pattern against its `ChatStorage.sqlite`.

@@ -4,7 +4,8 @@ Have Claude summarize your recent iMessages every few hours, without giving Clau
 (or your terminal) Full Disk Access.
 
 A ~200-line Swift app gets Full Disk Access, reads the last few hours of
-`~/Library/Messages/chat.db` read-only, and writes a private JSON file. Claude reads
+`~/Library/Messages/chat.db` read-only, looks up names with its own Contacts permission,
+and writes a private JSON file. Claude reads
 that file with the `/digest` command.
 
 Requires macOS 13+, Xcode command line tools, and Claude Code.
