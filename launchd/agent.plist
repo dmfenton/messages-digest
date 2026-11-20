@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>__LABEL__</string>
+	<!-- launchd starts the app's binary directly, so macOS checks the app's own grant. -->
+	<key>ProgramArguments</key>
+	<array>
+		<string>__APP__/Contents/MacOS/messages-digest</string>
+		<string>--hours</string>
+		<string>3</string>
+	</array>
+	<!-- Every 3 hours, plus once at login. -->
+	<key>StartInterval</key>
+	<integer>10800</integer>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardErrorPath</key>
+	<string>__LOGDIR__/export.log</string>
+	<key>ProcessType</key>
+	<string>Background</string>
+</dict>
+</plist>
