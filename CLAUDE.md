@@ -59,7 +59,8 @@ every 3 hours), or ask Claude to "make a scheduled task that runs /digest every 
 
 - **Who TCC checks.** macOS checks the "responsible process". A binary started from a
   shell inherits the shell's (denied) permission. `open` or launchd make the app its own
-  responsible process. That is why `refresh.sh` uses `open -n -W -g`.
+  responsible process. That is why `refresh.sh` uses `open -n -g`; `open -W` cannot wait on an
+  app this quick, so the script waits for `latest.json` to change (30 s limit).
 - **Dates.** `message.date` is nanoseconds since 2001-01-01 UTC.
 - **Text.** Recent macOS often leaves `message.text` NULL and stores an archived
   `NSAttributedString` in `attributedBody`; `decodeAttributedBody` handles it.

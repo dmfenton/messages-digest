@@ -15,7 +15,7 @@ struct ContactNames {
         return byKey[Self.key(handle)]
     }
 
-    // Phone numbers match on their last 10 digits ("+1 (706) 555-0100" == "7065550100");
+    // Phone numbers match on their last 10 digits ("+1 (415) 555-0100" == "4155550100");
     // emails match case-insensitively.
     static func key(_ handle: String) -> String {
         if handle.contains("@") { return handle.lowercased() }
